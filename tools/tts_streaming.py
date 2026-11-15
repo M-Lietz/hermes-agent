@@ -342,11 +342,15 @@ class GeminiStreamer(StreamingTTSProvider):
         base_url = normalize_gemini_base_url(
             self.section.get("base_url") or get_env_value("GEMINI_BASE_URL") or DEFAULT_GEMINI_TTS_BASE_URL,
         )
-        payload = {
-            "contents": [{"parts": [{"text": text}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}}}}
+        modern = model.lower().startswith("gemini-3.8-") and "tts" in model.lower()
+        config = {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {"voiceConfig": ({"voice": voice} if modern else
+                                            {"prebuiltVoiceConfig": {"voiceName": voice}})}}
+        if modern:
+            # The speaker consumes headerless PCM, not the model's default WAV.
+            config["responseFormat"] = {"audio": {"mimeType": "AUDIO_L16", "sampleRate": 24000}}
+        payload = {"contents": [{"parts": [{"text": text}]}], "generationConfig": config}
         url = f"{base_url}/models/{model}:streamGenerateContent"
 
         def _sse_chunks() -> Iterator[bytes]:
